@@ -218,3 +218,33 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_calculate_shortcut_id() {
+        use crate::calculate_shortcut_id;
+
+        let shortcut = steam_shortcuts_util::Shortcut {
+            order: "0",
+            app_id: 2931025216,
+            app_name: "Second Life",
+            exe: "\"/Applications/Second Life Viewer.app\"",
+            start_dir: "\"/Applications/\"",
+            icon: "",
+            shortcut_path: "",
+            launch_options: "",
+            is_hidden: false,
+            allow_desktop_config: false,
+            allow_overlay: false,
+            open_vr: 0,
+            dev_kit: 0,
+            dev_kit_game_id: "",
+            dev_kit_overrite_app_id: 0,
+            last_play_time: 1666334099,
+            tags: vec![],
+        };
+
+        assert_eq!(calculate_shortcut_id(&shortcut), 18291777663678808064);
+    }
+}
