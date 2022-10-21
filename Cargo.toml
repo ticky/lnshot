@@ -1,0 +1,17 @@
+[package]
+name = "lnshot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+directories = "4.0"
+keyvalues-serde = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+steamid-ng = "1.0"
+steamlocate = "1.0"
+steamy-vdf = "0.2"
+symlink = "0.1"
