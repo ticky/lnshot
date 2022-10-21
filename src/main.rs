@@ -26,6 +26,7 @@ fn main() -> Result<()> {
         SteamDir::locate().with_context(|| "Failed to locate Steam on this computer")?;
 
     // TODO: Does this include non-Steam shortcuts?
+    // ANSWER: NO, non-Steam shortcuts have 64-bit IDs, lol
     let steam_installed_apps = steam_dir.apps().to_owned();
 
     let users_list = steamy_vdf::load(steam_dir.path.join("config").join("loginusers.vdf"))?
