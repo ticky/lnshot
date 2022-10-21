@@ -1,8 +1,40 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use crc::{Algorithm, Crc};
 use directories::UserDirs;
+use steam_shortcuts_util::shortcut::Shortcut;
 use steamid_ng::SteamID;
 use steamlocate::SteamDir;
+
+/// The CRC32 Algorithm used by Steam Big Picture shortcuts.
+/// Not intended to be used directly; call [`calculate_shortcut_id`](self::calculate_shortcut_id) instead.
+const BIGPICTURE_ALGORITHM: Algorithm<u32> = Algorithm {
+    width: 32,
+    poly: 0x04C11DB7,
+    init: 0xffffffff,
+    refin: true,
+    refout: true,
+    xorout: 0xffffffff,
+    check: 0x00000000,
+    residue: 0x00000000,
+};
+
+/// Computes the Steam Big Picture-compatible shortcut ID, as used by
+/// screenshots, for a given Steam Shortcut object.
+///
+/// Based upon documentation of the algorithm from
+/// <https://gaming.stackexchange.com/a/386883>
+fn calculate_shortcut_id(shortcut: &Shortcut) -> u64 {
+    let checksum = {
+        let crc = Crc::<u32>::new(&BIGPICTURE_ALGORITHM);
+        let mut digest = crc.digest();
+        digest.update(format!("{}{}", shortcut.exe, shortcut.app_name).as_bytes());
+        digest.finalize()
+    };
+
+    let top_32 = checksum | 0x80000000;
+    ((top_32 as u64) << 32) | 0x02000000
+}
 
 /// Symlink your Steam games' screenshot directories into your Pictures folder
 #[derive(Parser, Debug)]
@@ -13,6 +45,7 @@ struct Args {
     pictures_directory_name: String,
 }
 
+/// I am the `main` function, with [`anyhow`](anyhow) result magic.
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -25,15 +58,13 @@ fn main() -> Result<()> {
     let mut steam_dir =
         SteamDir::locate().with_context(|| "Failed to locate Steam on this computer")?;
 
-    // TODO: Does this include non-Steam shortcuts?
-    // ANSWER: NO, non-Steam shortcuts have 64-bit IDs, lol
     let steam_installed_apps = steam_dir.apps().to_owned();
 
     let users_list = steamy_vdf::load(steam_dir.path.join("config").join("loginusers.vdf"))?
         .get("users")
-        .with_context(|| "Failed to find any  Steam users")?
+        .with_context(|| "Failed to find any Steam users")?
         .as_table()
-        .with_context(|| "Failed to find any  Steam users")?
+        .with_context(|| "Failed to find any Steam users")?
         .to_owned();
 
     for (steamid_str, userinfo) in users_list.iter() {
@@ -41,12 +72,27 @@ fn main() -> Result<()> {
 
         println!("[{}] Processing user", steamid_str);
 
-        let steam_user_screenshots_dir = steam_dir
+        let steam_user_data_dir = steam_dir
             .path
             .join("userdata")
-            .join(steamid.account_id().to_string())
-            .join("760")
-            .join("remote");
+            .join(steamid.account_id().to_string());
+
+        let steam_user_screenshots_dir = steam_user_data_dir.join("760").join("remote");
+
+        let shortcuts_data =
+            std::fs::read(steam_user_data_dir.join("config").join("shortcuts.vdf"))?;
+        let shortcuts_list = match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
+            Ok(list) => list,
+            Err(error) => {
+                println!("Error parsing shortcuts list: {}", error);
+                vec![]
+            }
+        };
+
+        for shortcut in shortcuts_list {
+            let shortcut_id = calculate_shortcut_id(&shortcut);
+            println!("Shortcut {}: {:?}", shortcut_id, shortcut);
+        }
 
         // If there's no screenshot folder, just move on to the next user
         if !steam_user_screenshots_dir.is_dir() {
@@ -90,6 +136,8 @@ fn main() -> Result<()> {
                 .to_str()
                 .with_context(|| "Failed to retrieve app id")?;
 
+            // TODO: This should parse as u64 if it doesn't fit u32,
+            // and instead look at the user's `shortcuts_list`
             let appid = appid_str.parse::<u32>()?;
 
             println!(
@@ -137,6 +185,8 @@ fn main() -> Result<()> {
                 .to_str()
                 .with_context(|| "Failed to retrieve an app id")?;
 
+            // TODO: This should parse as u64 if it doesn't fit u32,
+            // and instead look at the user's `shortcuts_list`
             if let Ok(appid) = appid_str.parse::<u32>() {
                 println!("[{}] Cleanup found dir with app id: {}", steamid_str, appid);
 

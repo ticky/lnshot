@@ -8,9 +8,11 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
+crc = "3.0"
 directories = "4.0"
 keyvalues-serde = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+steam_shortcuts_util = "1.0"
 steamid-ng = "1.0"
 steamlocate = "1.0"
 steamy-vdf = "0.2"
