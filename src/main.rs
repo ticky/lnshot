@@ -10,7 +10,7 @@ use steamlocate::SteamDir;
 /// Not intended to be used directly; call [`calculate_shortcut_id`](self::calculate_shortcut_id) instead.
 const BIGPICTURE_ALGORITHM: Algorithm<u32> = Algorithm {
     width: 32,
-    poly: 0x04C11DB7,
+    poly: 0x04c11db7,
     init: 0xffffffff,
     refin: true,
     refout: true,
