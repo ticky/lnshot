@@ -226,8 +226,9 @@ mod tests {
     #[test]
     fn test_calculate_shortcut_id() {
         use crate::calculate_shortcut_id;
+        use steam_shortcuts_util::Shortcut;
 
-        let shortcut = steam_shortcuts_util::Shortcut {
+        let shortcut_second_life = Shortcut {
             order: "0",
             app_id: 2931025216,
             app_name: "Second Life",
@@ -247,6 +248,36 @@ mod tests {
             tags: vec![],
         };
 
-        assert_eq!(calculate_shortcut_id(&shortcut), 18291777663678808064);
+        assert_eq!(
+            calculate_shortcut_id(&shortcut_second_life),
+            18291777663678808064
+        );
+
+        let shortcut_nfs_most_wanted = Shortcut {
+            order: "19",
+            app_id: 3127109556,
+            app_name: "Need for Speed: Most Wanted",
+            exe: "\"/home/deck/.local/share/Steam/steamapps/compatdata/3127109556/pfx/drive_c/Program Files (x86)/EA GAMES/Need for Speed Most Wanted/speed.exe\"",
+            start_dir: "\"/home/deck/.local/share/Steam/steamapps/compatdata/3127109556/pfx/drive_c/Program Files (x86)/EA GAMES/Need for Speed Most Wanted/\"",
+            icon: "/home/deck/.steam/steam/userdata/36075541/config/grid/3127109556_icon.png",
+            shortcut_path: "",
+            launch_options: "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
+            is_hidden: false,
+            allow_desktop_config: false,
+            allow_overlay: false,
+            open_vr: 0,
+            dev_kit: 0,
+            dev_kit_game_id: "",
+            dev_kit_overrite_app_id: 0,
+            last_play_time: 1665898298,
+            tags: vec![
+                "Racing & Driving Games",
+            ],
+        };
+
+        assert_eq!(
+            calculate_shortcut_id(&shortcut_nfs_most_wanted),
+            14897979843084812288
+        );
     }
 }
