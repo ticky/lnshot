@@ -79,6 +79,7 @@ fn main() -> Result<()> {
 
         let steam_user_screenshots_dir = steam_user_data_dir.join("760").join("remote");
 
+        // TODO: ignore this
         let shortcuts_data =
             std::fs::read(steam_user_data_dir.join("config").join("shortcuts.vdf"))?;
         let shortcuts_list = match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
@@ -88,11 +89,6 @@ fn main() -> Result<()> {
                 vec![]
             }
         };
-
-        for shortcut in shortcuts_list {
-            let shortcut_id = calculate_shortcut_id(&shortcut);
-            println!("Shortcut {}: {:?}", shortcut_id, shortcut);
-        }
 
         // If there's no screenshot folder, just move on to the next user
         if !steam_user_screenshots_dir.is_dir() {
@@ -136,27 +132,30 @@ fn main() -> Result<()> {
                 .to_str()
                 .with_context(|| "Failed to retrieve app id")?;
 
-            // TODO: This should parse as u64 if it doesn't fit u32,
-            // and instead look at the user's `shortcuts_list`
-            let appid = appid_str.parse::<u32>()?;
+            let appid = appid_str.parse::<u64>()?;
 
             println!(
-                "[{}; {:10}] Found app screenshot folder: {:?}",
+                "[{}; {:20}] Found app screenshot folder: {:?}",
                 steamid_str, appid, steam_app_screenshot_path
             );
 
-            let symlink_name = match steam_installed_apps.get(&appid) {
-                Some(Some(app)) => app
-                    .path
+            let symlink_name = if let Some(Some(app)) = steam_installed_apps.get(&(appid as u32)) {
+                app.path
                     .file_name()
-                    .with_context(|| "Failed to retrieve file name from install path")?,
-                Some(&None) | None => std::ffi::OsStr::new(appid_str),
+                    .with_context(|| "Failed to retrieve file name from install path")?
+            } else if let Some(shortcut) = shortcuts_list.iter().find(|shortcut| {
+                u64::from(shortcut.app_id & 0x7fffff) == appid
+                    || calculate_shortcut_id(shortcut) == appid
+            }) {
+                std::ffi::OsStr::new(shortcut.app_name)
+            } else {
+                std::ffi::OsStr::new(appid_str)
             };
 
             let target_symlink_path = target_screenshots_dir.join(symlink_name);
 
             println!(
-                "[{}; {:10}] target_symlink_path: {:?}",
+                "[{}; {:20}] target_symlink_path: {:?}",
                 steamid_str, appid, target_symlink_path
             );
 
@@ -185,12 +184,13 @@ fn main() -> Result<()> {
                 .to_str()
                 .with_context(|| "Failed to retrieve an app id")?;
 
-            // TODO: This should parse as u64 if it doesn't fit u32,
-            // and instead look at the user's `shortcuts_list`
-            if let Ok(appid) = appid_str.parse::<u32>() {
+            if let Ok(appid) = appid_str.parse::<u64>() {
                 println!("[{}] Cleanup found dir with app id: {}", steamid_str, appid);
 
-                if steam_installed_apps.contains_key(&appid) {
+                if steam_installed_apps.contains_key(&(appid as u32)) || shortcuts_list.iter().any(|shortcut| {
+                    u64::from(shortcut.app_id & 0x7fffff) == appid
+                        || calculate_shortcut_id(shortcut) == appid
+                }) {
                     let entry_symlink_path = entry.path();
 
                     if entry_symlink_path.is_symlink() {
