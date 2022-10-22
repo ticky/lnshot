@@ -187,10 +187,12 @@ fn main() -> Result<()> {
             if let Ok(appid) = appid_str.parse::<u64>() {
                 println!("[{}] Cleanup found dir with app id: {}", steamid_str, appid);
 
-                if steam_installed_apps.contains_key(&(appid as u32)) || shortcuts_list.iter().any(|shortcut| {
-                    u64::from(shortcut.app_id & 0x7fffff) == appid
-                        || calculate_shortcut_id(shortcut) == appid
-                }) {
+                if steam_installed_apps.contains_key(&(appid as u32))
+                    || shortcuts_list.iter().any(|shortcut| {
+                        u64::from(shortcut.app_id & 0x7fffff) == appid
+                            || calculate_shortcut_id(shortcut) == appid
+                    })
+                {
                     let entry_symlink_path = entry.path();
 
                     if entry_symlink_path.is_symlink() {
