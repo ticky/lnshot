@@ -57,4 +57,4 @@ Run `lnshot` to automatically symlink to `Steam Screenshots` within your Picture
 
 ### Automation
 
-I am currently investigating ways to automate running this (i.e. when new game screenshot folders are created), in particular on SteamOS. The command-line interface may change to accommodate this if necessary.
+You can invoke `lnshot daemon` to run it continuously, monitoring the file system for changes in the Steam screenshot directories. Instructions for running this automatically are forthcoming.
