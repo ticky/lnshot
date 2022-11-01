@@ -57,4 +57,25 @@ Run `lnshot` to automatically symlink to `Steam Screenshots` within your Picture
 
 ### Automation
 
-You can invoke `lnshot daemon` to run it continuously, monitoring the file system for changes in the Steam screenshot directories. Instructions for running this automatically are forthcoming.
+`lnshot` provides a "daemon" mode, allowing for monitoring the file system for changes in the Steam screenshot folders.
+
+#### Linux (Steam Deck)
+
+On Steam Deck, we can take advantage of `systemd` to run `lnshot` automatically.
+
+1. Run `mkdir -p ~/.config/systemd/user` to create the folder we need
+2. Create `~/.config/systemd/user/lnshot.service` (easy mode: `nano ~/.config/systemd/user/lnshot.service`), and paste this into it:
+   ```ini
+   [Unit]
+   Description=Steam Screenshot Symlinking Service
+
+   [Service]
+   ExecStart=%h/.cargo/bin/lnshot daemon
+   Restart=always
+
+   [Install]
+   WantedBy=default.target
+   ```
+3. Save the file
+4. Run `systemctl enable --user lnshot.service` to make it automatically start in the future.
+
