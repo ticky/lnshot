@@ -99,16 +99,20 @@ fn main() -> Result<()> {
                 let steam_user_screenshots_dir =
                     steamid_steam_user_data_dir.join("760").join("remote");
 
-                // TODO: ignore errors stemming from this
                 let shortcuts_data = std::fs::read(
                     steamid_steam_user_data_dir
                         .join("config")
                         .join("shortcuts.vdf"),
-                )?;
+                )
+                .unwrap_or_else(|error| {
+                    println!("Warning: Could not read shortcuts list: {}", error);
+                    vec![]
+                });
+
                 let shortcuts_list = match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
                     Ok(list) => list,
                     Err(error) => {
-                        println!("Error parsing shortcuts list: {}", error);
+                        println!("Warning: Could not parse shortcuts list: {}", error);
                         vec![]
                     }
                 };
@@ -368,17 +372,21 @@ fn main() -> Result<()> {
                     let steam_user_screenshots_dir =
                         steamid_steam_user_data_dir.join("760").join("remote");
 
-                    // TODO: ignore errors stemming from this
                     let shortcuts_data = std::fs::read(
                         steamid_steam_user_data_dir
                             .join("config")
                             .join("shortcuts.vdf"),
-                    )?;
+                    )
+                    .unwrap_or_else(|error| {
+                        println!("Warning: Could not read shortcuts list: {}", error);
+                        vec![]
+                    });
+
                     let shortcuts_list =
                         match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
                             Ok(list) => list,
                             Err(error) => {
-                                println!("Error parsing shortcuts list: {}", error);
+                                println!("Warning: Could not parse shortcuts list: {}", error);
                                 vec![]
                             }
                         };
