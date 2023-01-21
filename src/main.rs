@@ -154,6 +154,10 @@ fn main() -> Result<()> {
                 for entry in steam_user_screenshots_dir.read_dir()? {
                     let entry = entry?;
 
+                    if !entry.path().is_dir() {
+                        continue;
+                    }
+
                     let steam_app_screenshot_path = entry.path().join("screenshots");
                     let filename = entry.file_name();
 
