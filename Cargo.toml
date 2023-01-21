@@ -11,6 +11,8 @@ clap = { version = "4.0", features = ["derive"] }
 crc = "3.0"
 directories = "4.0"
 keyvalues-serde = "0.1"
+notify-debouncer-mini = "0.2"
+path-matchers = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 steam_shortcuts_util = "1.0"
 steamid-ng = "1.0"
