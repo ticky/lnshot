@@ -13,7 +13,7 @@ Running `lnshot` will generate a set of [symbolic links](https://en.wikipedia.or
 ```
 📂 ~/Pictures/Steam Screenshots
 └ 📂 Ticky
-  ├ 📂 Hardspace Shipbreaker
+  ├ 📂 Hardspace: Shipbreaker
   │ └ 🌌 20221020102933_1.jpg
   ├ 📂 Need for Speed: Most Wanted
   │ └ 🌃 20221005164632_1.jpg
@@ -41,7 +41,7 @@ Instead of this:
 
 `lnshot` can detect Steam's installation directory, and automatically find your Pictures folder across all three supported Steam platforms.
 
-User folders are generated for each Steam user logged into your system (filtering is not yet supported). Game folders will be named after your game title for non-Steam shortcuts, and named the same as the `steamapps/common` installation folder for games managed by Steam, which is usually a reasonable name. This may change to use the full Steam app name in the future.
+User folders are generated for each Steam user logged into your system (filtering is not yet supported). Game folders will be named after each game's title.
 
 `lnshot` does this offline, using only the metadata Steam already has stored on your hard disk.
 
