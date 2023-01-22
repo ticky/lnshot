@@ -1,40 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use crc::{Algorithm, Crc};
 use directories::UserDirs;
-use steam_shortcuts_util::shortcut::Shortcut;
 use steamid_ng::SteamID;
-use steamlocate::SteamDir;
-
-/// The CRC32 Algorithm used by Steam Big Picture shortcuts.
-/// Not intended to be used directly; call [`calculate_shortcut_id`](self::calculate_shortcut_id) instead.
-const BIGPICTURE_ALGORITHM: Algorithm<u32> = Algorithm {
-    width: 32,
-    poly: 0x04c11db7,
-    init: 0xffffffff,
-    refin: true,
-    refout: true,
-    xorout: 0xffffffff,
-    check: 0x00000000,
-    residue: 0x00000000,
-};
-
-/// Computes the Steam Big Picture-compatible shortcut ID, as used by
-/// screenshots, for a given Steam Shortcut object.
-///
-/// Based upon documentation of the algorithm from
-/// <https://gaming.stackexchange.com/a/386883>
-fn calculate_shortcut_id(shortcut: &Shortcut) -> u64 {
-    let checksum = {
-        let crc = Crc::<u32>::new(&BIGPICTURE_ALGORITHM);
-        let mut digest = crc.digest();
-        digest.update(format!("{}{}", shortcut.exe, shortcut.app_name).as_bytes());
-        digest.finalize()
-    };
-
-    let top_32 = checksum | 0x80000000;
-    ((top_32 as u64) << 32) | 0x02000000
-}
+use steamlocate::{SteamDir};
 
 /// Symlink your Steam games' screenshot directories into your Pictures folder
 #[derive(Parser, Debug)]
@@ -78,7 +46,8 @@ fn main() -> Result<()> {
 
     match args.action.unwrap_or(Action::Go) {
         Action::Go => {
-            let steam_installed_apps = steam_dir.apps().to_owned();
+            let steam_apps = steam_dir.apps().to_owned();
+            let steam_shortcuts = steam_dir.shortcuts().to_owned();
 
             let users_list =
                 steamy_vdf::load(steam_dir.path.join("config").join("loginusers.vdf"))?
@@ -98,24 +67,6 @@ fn main() -> Result<()> {
 
                 let steam_user_screenshots_dir =
                     steamid_steam_user_data_dir.join("760").join("remote");
-
-                let shortcuts_data = std::fs::read(
-                    steamid_steam_user_data_dir
-                        .join("config")
-                        .join("shortcuts.vdf"),
-                )
-                .unwrap_or_else(|error| {
-                    println!("Warning: Could not read shortcuts list: {}", error);
-                    vec![]
-                });
-
-                let shortcuts_list = match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
-                    Ok(list) => list,
-                    Err(error) => {
-                        println!("Warning: Could not parse shortcuts list: {}", error);
-                        vec![]
-                    }
-                };
 
                 // If there's no screenshot folder, just move on to the next user
                 if !steam_user_screenshots_dir.is_dir() {
@@ -172,19 +123,18 @@ fn main() -> Result<()> {
                         steamid_str, appid, steam_app_screenshot_path
                     );
 
-                    let symlink_name =
-                        if let Some(Some(app)) = steam_installed_apps.get(&(appid as u32)) {
-                            app.path
-                                .file_name()
-                                .with_context(|| "Failed to retrieve file name from install path")?
-                        } else if let Some(shortcut) = shortcuts_list.iter().find(|shortcut| {
-                            u64::from(shortcut.app_id & 0x7fffff) == appid
-                                || calculate_shortcut_id(shortcut) == appid
-                        }) {
-                            std::ffi::OsStr::new(shortcut.app_name)
-                        } else {
-                            std::ffi::OsStr::new(appid_str)
-                        };
+                    let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
+                        app.path
+                            .file_name()
+                            .with_context(|| "Failed to retrieve file name from install path")?
+                    } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
+                        u64::from(shortcut.appid & 0x7fffff) == appid
+                            || shortcut.steam_id() == appid
+                    }) {
+                        std::ffi::OsStr::new(&shortcut.app_name)
+                    } else {
+                        std::ffi::OsStr::new(appid_str)
+                    };
 
                     let target_symlink_path = target_screenshots_dir.join(symlink_name);
 
@@ -223,10 +173,10 @@ fn main() -> Result<()> {
                     if let Ok(appid) = appid_str.parse::<u64>() {
                         println!("[{}] Cleanup found dir with app id: {}", steamid_str, appid);
 
-                        if steam_installed_apps.contains_key(&(appid as u32))
-                            || shortcuts_list.iter().any(|shortcut| {
-                                u64::from(shortcut.app_id & 0x7fffff) == appid
-                                    || calculate_shortcut_id(shortcut) == appid
+                        if steam_apps.contains_key(&(appid as u32))
+                            || steam_shortcuts.iter().any(|shortcut| {
+                                u64::from(shortcut.appid & 0x7fffff) == appid
+                                    || shortcut.steam_id() == appid
                             })
                         {
                             let entry_symlink_path = entry.path();
@@ -376,25 +326,6 @@ fn main() -> Result<()> {
                     let steam_user_screenshots_dir =
                         steamid_steam_user_data_dir.join("760").join("remote");
 
-                    let shortcuts_data = std::fs::read(
-                        steamid_steam_user_data_dir
-                            .join("config")
-                            .join("shortcuts.vdf"),
-                    )
-                    .unwrap_or_else(|error| {
-                        println!("Warning: Could not read shortcuts list: {}", error);
-                        vec![]
-                    });
-
-                    let shortcuts_list =
-                        match steam_shortcuts_util::parse_shortcuts(&shortcuts_data) {
-                            Ok(list) => list,
-                            Err(error) => {
-                                println!("Warning: Could not parse shortcuts list: {}", error);
-                                vec![]
-                            }
-                        };
-
                     // If there's no screenshot folder, just move on to the next event
                     if !steam_user_screenshots_dir.is_dir() {
                         println!(
@@ -420,21 +351,21 @@ fn main() -> Result<()> {
                         steamid_str, appid, steam_app_screenshot_path
                     );
 
-                    let steam_installed_apps = steam_dir.apps().to_owned();
+                    let steam_apps = steam_dir.apps().to_owned();
+                    let steam_shortcuts = steam_dir.shortcuts();
 
-                    let symlink_name =
-                        if let Some(Some(app)) = steam_installed_apps.get(&(appid as u32)) {
-                            app.path
-                                .file_name()
-                                .with_context(|| "Failed to retrieve file name from install path")?
-                        } else if let Some(shortcut) = shortcuts_list.iter().find(|shortcut| {
-                            u64::from(shortcut.app_id & 0x7fffff) == appid
-                                || calculate_shortcut_id(shortcut) == appid
-                        }) {
-                            std::ffi::OsStr::new(shortcut.app_name)
-                        } else {
-                            std::ffi::OsStr::new(&appid_str)
-                        };
+                    let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
+                        app.path
+                            .file_name()
+                            .with_context(|| "Failed to retrieve file name from install path")?
+                    } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
+                        u64::from(shortcut.appid & 0x7fffff) == appid
+                            || shortcut.steam_id() == appid
+                    }) {
+                        std::ffi::OsStr::new(&shortcut.app_name)
+                    } else {
+                        std::ffi::OsStr::new(&appid_str)
+                    };
 
                     let target_symlink_path = target_screenshots_dir.join(symlink_name);
 
@@ -465,65 +396,4 @@ fn main() -> Result<()> {
     };
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_calculate_shortcut_id() {
-        use crate::calculate_shortcut_id;
-        use steam_shortcuts_util::Shortcut;
-
-        let shortcut_second_life = Shortcut {
-            order: "0",
-            app_id: 2931025216,
-            app_name: "Second Life",
-            exe: "\"/Applications/Second Life Viewer.app\"",
-            start_dir: "\"/Applications/\"",
-            icon: "",
-            shortcut_path: "",
-            launch_options: "",
-            is_hidden: false,
-            allow_desktop_config: false,
-            allow_overlay: false,
-            open_vr: 0,
-            dev_kit: 0,
-            dev_kit_game_id: "",
-            dev_kit_overrite_app_id: 0,
-            last_play_time: 1666334099,
-            tags: vec![],
-        };
-
-        assert_eq!(
-            calculate_shortcut_id(&shortcut_second_life),
-            18291777663678808064
-        );
-
-        let shortcut_nfs_most_wanted = Shortcut {
-            order: "19",
-            app_id: 3127109556,
-            app_name: "Need for Speed: Most Wanted",
-            exe: "\"/home/deck/.local/share/Steam/steamapps/compatdata/3127109556/pfx/drive_c/Program Files (x86)/EA GAMES/Need for Speed Most Wanted/speed.exe\"",
-            start_dir: "\"/home/deck/.local/share/Steam/steamapps/compatdata/3127109556/pfx/drive_c/Program Files (x86)/EA GAMES/Need for Speed Most Wanted/\"",
-            icon: "/home/deck/.steam/steam/userdata/36075541/config/grid/3127109556_icon.png",
-            shortcut_path: "",
-            launch_options: "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
-            is_hidden: false,
-            allow_desktop_config: false,
-            allow_overlay: false,
-            open_vr: 0,
-            dev_kit: 0,
-            dev_kit_game_id: "",
-            dev_kit_overrite_app_id: 0,
-            last_play_time: 1665898298,
-            tags: vec![
-                "Racing & Driving Games",
-            ],
-        };
-
-        assert_eq!(
-            calculate_shortcut_id(&shortcut_nfs_most_wanted),
-            14897979843084812288
-        );
-    }
 }
