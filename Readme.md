@@ -1,5 +1,7 @@
 # `lnshot`
 
+[![Rust](https://github.com/ticky/lnshot/actions/workflows/rust.yml/badge.svg)](https://github.com/ticky/lnshot/actions/workflows/rust.yml)
+
 🧖🏻‍♀️ Symlink your Steam games' screenshot directories into your Pictures folder
 
 ## About
