@@ -14,6 +14,6 @@ notify-debouncer-mini = "0.2"
 path-matchers = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 steamid-ng = "1.0"
-steamlocate = { version = "1.1", features = ["shortcuts_extras"] }
+steamlocate = { version = "1.2", features = ["shortcuts_extras"] }
 steamy-vdf = "0.2"
 symlink = "0.1"
