@@ -10,7 +10,7 @@ anyhow = { version = "1.0", features = ["backtrace"] }
 clap = { version = "4.3", features = ["derive"] }
 directories = "4.0"
 keyvalues-serde = "0.1"
-notify-debouncer-mini = "0.2"
+notify-debouncer-mini = "0.3"
 path-matchers = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 steamid-ng = "1.0"
