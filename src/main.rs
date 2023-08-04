@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use directories::UserDirs;
 use steamid_ng::SteamID;
-use steamlocate::{SteamDir};
+use steamlocate::SteamDir;
 
 /// Symlink your Steam games' screenshot directories into your Pictures folder
 #[derive(Parser, Debug)]
@@ -124,16 +124,16 @@ fn main() -> Result<()> {
                     );
 
                     let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
-                        app.path
-                            .file_name()
-                            .with_context(|| "Failed to retrieve file name from install path")?
+                        app.name
+                            .clone()
+                            .with_context(|| "Failed to retrieve Steam app name")?
                     } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
                         u64::from(shortcut.appid & 0x7fffff) == appid
                             || shortcut.steam_id() == appid
                     }) {
-                        std::ffi::OsStr::new(&shortcut.app_name)
+                        shortcut.app_name.to_string()
                     } else {
-                        std::ffi::OsStr::new(appid_str)
+                        appid_str.to_string()
                     };
 
                     let target_symlink_path = target_screenshots_dir.join(symlink_name);
@@ -355,16 +355,16 @@ fn main() -> Result<()> {
                     let steam_shortcuts = steam_dir.shortcuts();
 
                     let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
-                        app.path
-                            .file_name()
-                            .with_context(|| "Failed to retrieve file name from install path")?
+                        app.name
+                            .clone()
+                            .with_context(|| "Failed to retrieve Steam app name")?
                     } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
                         u64::from(shortcut.appid & 0x7fffff) == appid
                             || shortcut.steam_id() == appid
                     }) {
-                        std::ffi::OsStr::new(&shortcut.app_name)
+                        shortcut.app_name.to_string()
                     } else {
-                        std::ffi::OsStr::new(&appid_str)
+                        appid_str.to_string()
                     };
 
                     let target_symlink_path = target_screenshots_dir.join(symlink_name);
