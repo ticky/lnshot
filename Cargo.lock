@@ -424,6 +424,7 @@ dependencies = [
  "clap",
  "directories",
  "keyvalues-serde",
+ "lazy_static",
  "notify-debouncer-mini",
  "path-matchers",
  "serde",

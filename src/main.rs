@@ -1,8 +1,21 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use directories::UserDirs;
+use std::collections::HashMap;
 use steamid_ng::SteamID;
-use steamlocate::{SteamDir};
+use steamlocate::SteamDir;
+
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref BUILT_IN_APPS: HashMap<u64, &'static str> = HashMap::from([
+        (0, "Unknown"),
+        (5, "Dedicated Server"),
+        (7, "Steam Client"),
+        (910, "Steam Media Player"),
+    ]);
+}
 
 /// Symlink your Steam games' screenshot directories into your Pictures folder
 #[derive(Parser, Debug)]
@@ -123,7 +136,9 @@ fn main() -> Result<()> {
                         steamid_str, appid, steam_app_screenshot_path
                     );
 
-                    let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
+                    let symlink_name = if let Some(app_name) = BUILT_IN_APPS.get(&appid) {
+                        std::ffi::OsStr::new(app_name)
+                    } else if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
                         app.path
                             .file_name()
                             .with_context(|| "Failed to retrieve file name from install path")?
@@ -354,7 +369,9 @@ fn main() -> Result<()> {
                     let steam_apps = steam_dir.apps().to_owned();
                     let steam_shortcuts = steam_dir.shortcuts();
 
-                    let symlink_name = if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
+                    let symlink_name = if let Some(app_name) = BUILT_IN_APPS.get(&appid) {
+                        std::ffi::OsStr::new(app_name)
+                    } else if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
                         app.path
                             .file_name()
                             .with_context(|| "Failed to retrieve file name from install path")?
