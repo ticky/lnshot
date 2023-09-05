@@ -231,7 +231,7 @@ fn main() -> Result<()> {
             let (transmit_channel, receive_channel) = std::sync::mpsc::channel();
 
             let mut debouncer =
-                new_debouncer(std::time::Duration::from_secs(5), None, transmit_channel)?;
+                new_debouncer(std::time::Duration::from_secs(5), transmit_channel)?;
 
             debouncer
                 .watcher()
