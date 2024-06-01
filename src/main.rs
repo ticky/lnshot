@@ -42,6 +42,59 @@ enum Action {
     Daemon,
 }
 
+fn process_appid_for_screenshot_paths(
+    steam_dir: &mut SteamDir,
+    appid: u64,
+    steam_app_screenshot_path: &std::path::Path,
+    target_screenshots_dir: &std::path::Path,
+) -> Result<()> {
+    use std::ffi::OsString;
+
+    let steam_apps = steam_dir.apps().to_owned();
+    let steam_shortcuts = steam_dir.shortcuts();
+
+    let symlink_name = if let Some(app_name) = BUILT_IN_APPS.get(&appid) {
+        OsString::from(app_name)
+    } else if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
+        app.path
+            .file_name()
+            .with_context(|| "Failed to retrieve file name from install path")?
+            .to_os_string()
+    } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
+        u64::from(shortcut.appid & 0x7fffff) == appid || shortcut.steam_id() == appid
+    }) {
+        OsString::from(&shortcut.app_name)
+    } else {
+        OsString::from(&appid.to_string())
+    };
+
+    let target_symlink_path = target_screenshots_dir.join(symlink_name);
+
+    println!(
+        "[a{:20}] {:?} -> {:?}",
+        appid, steam_app_screenshot_path, target_symlink_path,
+    );
+
+    if target_symlink_path.is_symlink() {
+        match symlink::remove_symlink_auto(&target_symlink_path) {
+            Ok(_) => {}
+            Err(error) => {
+                println!("Error unlinking {:?}: {}", target_symlink_path, error)
+            }
+        };
+    }
+
+    match symlink::symlink_dir(steam_app_screenshot_path, &target_symlink_path) {
+        Ok(_) => {}
+        Err(error) => println!(
+            "Error symlinking {:?} to {:?}: {}",
+            steam_app_screenshot_path, target_symlink_path, error
+        ),
+    };
+
+    Ok(())
+}
+
 /// I am the `main` function, with [`anyhow`](anyhow) result magic.
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -73,8 +126,6 @@ fn main() -> Result<()> {
             for (steamid_str, userinfo) in users_list.iter() {
                 let steamid = SteamID::from(steamid_str.parse::<u64>()?);
 
-                println!("[{}] Processing user", steamid_str);
-
                 let steamid_steam_user_data_dir =
                     steam_user_data_dir.join(steamid.account_id().to_string());
 
@@ -84,14 +135,14 @@ fn main() -> Result<()> {
                 // If there's no screenshot folder, just move on to the next user
                 if !steam_user_screenshots_dir.is_dir() {
                     println!(
-                        "[{}] User does not have a Steam screenshot folder!",
+                        "[u{}] User does not have a Steam screenshot folder!",
                         steamid_str
                     );
                     continue;
                 }
 
                 println!(
-                    "[{}] Found Steam screenshot folder {:?}",
+                    "[u{}] Found Steam screenshot folder {:?}",
                     steamid_str, steam_user_screenshots_dir
                 );
 
@@ -108,7 +159,7 @@ fn main() -> Result<()> {
                         )
                     })?;
 
-                println!("[{}] Found display name {:?} for user", steamid_str, name);
+                println!("[u{}] Display name: {:?}", steamid_str, name);
 
                 let target_screenshots_dir = screenshots_dir.join(name);
                 if !target_screenshots_dir.is_dir() {
@@ -131,49 +182,12 @@ fn main() -> Result<()> {
 
                     let appid = appid_str.parse::<u64>()?;
 
-                    println!(
-                        "[{}; {:20}] Found app screenshot folder: {:?}",
-                        steamid_str, appid, steam_app_screenshot_path
-                    );
-
-                    let symlink_name = if let Some(app_name) = BUILT_IN_APPS.get(&appid) {
-                        std::ffi::OsStr::new(app_name)
-                    } else if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
-                        app.path
-                            .file_name()
-                            .with_context(|| "Failed to retrieve file name from install path")?
-                    } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
-                        u64::from(shortcut.appid & 0x7fffff) == appid
-                            || shortcut.steam_id() == appid
-                    }) {
-                        std::ffi::OsStr::new(&shortcut.app_name)
-                    } else {
-                        std::ffi::OsStr::new(appid_str)
-                    };
-
-                    let target_symlink_path = target_screenshots_dir.join(symlink_name);
-
-                    println!(
-                        "[{}; {:20}] target_symlink_path: {:?}",
-                        steamid_str, appid, target_symlink_path
-                    );
-
-                    if target_symlink_path.is_symlink() {
-                        match symlink::remove_symlink_auto(&target_symlink_path) {
-                            Ok(_) => {}
-                            Err(error) => {
-                                println!("Error unlinking {:?}: {}", target_symlink_path, error)
-                            }
-                        };
-                    }
-
-                    match symlink::symlink_dir(&steam_app_screenshot_path, &target_symlink_path) {
-                        Ok(_) => {}
-                        Err(error) => println!(
-                            "Error symlinking {:?} to {:?}: {}",
-                            steam_app_screenshot_path, target_symlink_path, error
-                        ),
-                    };
+                    process_appid_for_screenshot_paths(
+                        &mut steam_dir,
+                        appid,
+                        &steam_app_screenshot_path,
+                        &target_screenshots_dir,
+                    )?;
                 }
 
                 // Cleanup phase: remove any app ID-based symlinks for which we currently know the app's name
@@ -186,7 +200,10 @@ fn main() -> Result<()> {
                         .with_context(|| "Failed to retrieve an app id")?;
 
                     if let Ok(appid) = appid_str.parse::<u64>() {
-                        println!("[{}] Cleanup found dir with app id: {}", steamid_str, appid);
+                        println!(
+                            "[u{}] Cleaning appid dir: {}",
+                            steamid_str, appid
+                        );
 
                         if steam_apps.contains_key(&(appid as u32))
                             || steam_shortcuts.iter().any(|shortcut| {
@@ -198,7 +215,7 @@ fn main() -> Result<()> {
 
                             if entry_symlink_path.is_symlink() {
                                 println!(
-                                    "[{}] App {} is installed! We don't need this symlink",
+                                    "[u{}] App {} is installed! We don't need this symlink",
                                     steamid_str, appid
                                 );
 
@@ -213,7 +230,7 @@ fn main() -> Result<()> {
                                 };
                             } else {
                                 println!(
-                                    "[{}] App {} is installed, but the matching item is not a symlink; skipping!",
+                                    "[u{}] App {} is installed, but the matching item is not a symlink; skipping!",
                                     steamid_str, appid
                                 );
                             }
@@ -230,8 +247,7 @@ fn main() -> Result<()> {
 
             let (transmit_channel, receive_channel) = std::sync::mpsc::channel();
 
-            let mut debouncer =
-                new_debouncer(std::time::Duration::from_secs(5), transmit_channel)?;
+            let mut debouncer = new_debouncer(std::time::Duration::from_secs(5), transmit_channel)?;
 
             debouncer
                 .watcher()
@@ -284,7 +300,7 @@ fn main() -> Result<()> {
                     };
 
                     println!(
-                        "[{}; {:20}] Change detected in screenshot dir for app",
+                        "[u{}; a{:20}] Change detected in screenshot dir for app",
                         steamid_from_dir, appid
                     );
 
@@ -296,36 +312,38 @@ fn main() -> Result<()> {
                             .with_context(|| "Failed to find any Steam users")?
                             .to_owned();
 
-                    let name = match users_list.iter().find(|(steamid_str, _userinfo)| {
-                        let steamid = SteamID::from(steamid_str.parse::<u64>().unwrap_or(0));
+                    let (steamid_str, name) =
+                        match users_list.iter().find(|(steamid_str, _userinfo)| {
+                            let steamid = SteamID::from(steamid_str.parse::<u64>().unwrap_or(0));
 
-                        u64::from(steamid.account_id()) == steamid_from_dir
-                    }) {
-                        Some((_steamid_str, userinfo)) => Some(
-                            userinfo
-                                .get("PersonaName")
-                                .with_context(|| {
-                                    format!(
-                                        "Failed to retrieve account PersonaName for {}",
-                                        steamid_from_dir
-                                    )
-                                })?
-                                .as_str()
-                                .with_context(|| {
-                                    format!(
-                                        "Failed to convert PersonaName for {} into a string",
-                                        steamid_from_dir
-                                    )
-                                })?,
-                        ),
-                        None => None,
-                    }
-                    .with_context(|| {
-                        format!("Failed to get account information for {}", steamid_from_dir)
-                    })?;
+                            u64::from(steamid.account_id()) == steamid_from_dir
+                        }) {
+                            Some((steamid_str, userinfo)) => Some((
+                                steamid_str,
+                                userinfo
+                                    .get("PersonaName")
+                                    .with_context(|| {
+                                        format!(
+                                            "Failed to retrieve account PersonaName for {}",
+                                            steamid_from_dir
+                                        )
+                                    })?
+                                    .as_str()
+                                    .with_context(|| {
+                                        format!(
+                                            "Failed to convert PersonaName for {} into a string",
+                                            steamid_from_dir
+                                        )
+                                    })?,
+                            )),
+                            None => None,
+                        }
+                        .with_context(|| {
+                            format!("Failed to get account information for {}", steamid_from_dir)
+                        })?;
 
                     println!(
-                        "[{}; {:20}] Found display name {:?} for user",
+                        "[u{}; a{:20}] Display name: {:?}",
                         steamid_from_dir, appid, name
                     );
 
@@ -333,8 +351,6 @@ fn main() -> Result<()> {
                     if !target_screenshots_dir.is_dir() {
                         std::fs::create_dir_all(target_screenshots_dir.clone())?;
                     }
-
-                    let steamid_str = steamid_from_dir.to_string();
 
                     let steamid_steam_user_data_dir = steam_user_data_dir.join(&steamid_str);
 
@@ -344,14 +360,14 @@ fn main() -> Result<()> {
                     // If there's no screenshot folder, just move on to the next event
                     if !steam_user_screenshots_dir.is_dir() {
                         println!(
-                            "[{}] User does not have a Steam screenshot folder!",
+                            "[u{}] User does not have a Steam screenshot folder!",
                             steamid_str
                         );
                         continue;
                     }
 
                     println!(
-                        "[{}; {:20}] Found Steam screenshot folder {:?} for user {:?}",
+                        "[u{}; a{:20}] Found Steam screenshot folder {:?} for user {:?}",
                         steamid_from_dir, appid, steam_user_screenshots_dir, name
                     );
 
@@ -361,52 +377,12 @@ fn main() -> Result<()> {
                         .join(&appid_str)
                         .join("screenshots");
 
-                    println!(
-                        "[{}; {:20}] Found app screenshot folder: {:?}",
-                        steamid_str, appid, steam_app_screenshot_path
-                    );
-
-                    let steam_apps = steam_dir.apps().to_owned();
-                    let steam_shortcuts = steam_dir.shortcuts();
-
-                    let symlink_name = if let Some(app_name) = BUILT_IN_APPS.get(&appid) {
-                        std::ffi::OsStr::new(app_name)
-                    } else if let Some(Some(app)) = steam_apps.get(&(appid as u32)) {
-                        app.path
-                            .file_name()
-                            .with_context(|| "Failed to retrieve file name from install path")?
-                    } else if let Some(shortcut) = steam_shortcuts.iter().find(|shortcut| {
-                        u64::from(shortcut.appid & 0x7fffff) == appid
-                            || shortcut.steam_id() == appid
-                    }) {
-                        std::ffi::OsStr::new(&shortcut.app_name)
-                    } else {
-                        std::ffi::OsStr::new(&appid_str)
-                    };
-
-                    let target_symlink_path = target_screenshots_dir.join(symlink_name);
-
-                    println!(
-                        "[{}; {:20}] target_symlink_path: {:?}",
-                        steamid_str, appid, target_symlink_path
-                    );
-
-                    if target_symlink_path.is_symlink() {
-                        match symlink::remove_symlink_auto(&target_symlink_path) {
-                            Ok(_) => {}
-                            Err(error) => {
-                                println!("Error unlinking {:?}: {}", target_symlink_path, error)
-                            }
-                        };
-                    }
-
-                    match symlink::symlink_dir(&steam_app_screenshot_path, &target_symlink_path) {
-                        Ok(_) => {}
-                        Err(error) => println!(
-                            "Error symlinking {:?} to {:?}: {}",
-                            steam_app_screenshot_path, target_symlink_path, error
-                        ),
-                    };
+                    process_appid_for_screenshot_paths(
+                        &mut steam_dir,
+                        appid,
+                        &steam_app_screenshot_path,
+                        &target_screenshots_dir,
+                    )?;
                 }
             }
         }
