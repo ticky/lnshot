@@ -25,6 +25,10 @@ struct Args {
     #[arg(short, long, default_value = "Steam Screenshots")]
     pictures_directory_name: String,
 
+    /// Specify one specific user by 64-bit Steam ID. NOTE: Skips creating user-named folders inside the managed directory.
+    #[arg(short, long)]
+    single_user_id64: Option<u64>,
+
     #[command(subcommand)]
     action: Option<Action>,
 }
@@ -123,8 +127,15 @@ fn main() -> Result<()> {
                     .with_context(|| "Failed to find any Steam users")?
                     .to_owned();
 
-            for (steamid_str, userinfo) in users_list.iter() {
-                let steamid = SteamID::from(steamid_str.parse::<u64>()?);
+            for (steamid64_str, userinfo) in users_list.iter() {
+                let steamid = SteamID::from(steamid64_str.parse::<u64>()?);
+
+                if let Some(single_user_id64) = args.single_user_id64 {
+                    if single_user_id64 != steamid.into() {
+                        println!("[u{}] Skipping mismatching user", steamid64_str);
+                        continue;
+                    }
+                }
 
                 let steamid_steam_user_data_dir =
                     steam_user_data_dir.join(steamid.account_id().to_string());
@@ -136,32 +147,40 @@ fn main() -> Result<()> {
                 if !steam_user_screenshots_dir.is_dir() {
                     println!(
                         "[u{}] User does not have a Steam screenshot folder!",
-                        steamid_str
+                        steamid64_str
                     );
                     continue;
                 }
 
                 println!(
                     "[u{}] Found Steam screenshot folder {:?}",
-                    steamid_str, steam_user_screenshots_dir
+                    steamid64_str, steam_user_screenshots_dir
                 );
 
-                let name = userinfo
-                    .get("PersonaName")
-                    .with_context(|| {
-                        format!("Failed to retrieve account PersonaName for {}", steamid_str)
-                    })?
-                    .as_str()
-                    .with_context(|| {
-                        format!(
-                            "Failed to convert PersonaName for {} into a string",
-                            steamid_str
-                        )
-                    })?;
+                let mut target_screenshots_dir = screenshots_dir.clone();
 
-                println!("[u{}] Display name: {:?}", steamid_str, name);
+                if args.single_user_id64.is_none() {
+                    let name = userinfo
+                        .get("PersonaName")
+                        .with_context(|| {
+                            format!(
+                                "Failed to retrieve account PersonaName for {}",
+                                steamid64_str
+                            )
+                        })?
+                        .as_str()
+                        .with_context(|| {
+                            format!(
+                                "Failed to convert PersonaName for {} into a string",
+                                steamid64_str
+                            )
+                        })?;
 
-                let target_screenshots_dir = screenshots_dir.join(name);
+                    println!("[u{}] Display name: {:?}", steamid64_str, name);
+
+                    target_screenshots_dir = target_screenshots_dir.join(name);
+                }
+
                 if !target_screenshots_dir.is_dir() {
                     std::fs::create_dir_all(target_screenshots_dir.clone())?;
                 }
@@ -200,10 +219,7 @@ fn main() -> Result<()> {
                         .with_context(|| "Failed to retrieve an app id")?;
 
                     if let Ok(appid) = appid_str.parse::<u64>() {
-                        println!(
-                            "[u{}] Cleaning appid dir: {}",
-                            steamid_str, appid
-                        );
+                        println!("[u{}] Cleaning appid dir: {}", steamid64_str, appid);
 
                         if steam_apps.contains_key(&(appid as u32))
                             || steam_shortcuts.iter().any(|shortcut| {
@@ -216,7 +232,7 @@ fn main() -> Result<()> {
                             if entry_symlink_path.is_symlink() {
                                 println!(
                                     "[u{}] App {} is installed! We don't need this symlink",
-                                    steamid_str, appid
+                                    steamid64_str, appid
                                 );
 
                                 match symlink::remove_symlink_auto(&entry_symlink_path) {
@@ -231,7 +247,7 @@ fn main() -> Result<()> {
                             } else {
                                 println!(
                                     "[u{}] App {} is installed, but the matching item is not a symlink; skipping!",
-                                    steamid_str, appid
+                                    steamid64_str, appid
                                 );
                             }
                         }
@@ -273,7 +289,7 @@ fn main() -> Result<()> {
                         continue;
                     }
 
-                    let (steamid_from_dir, appid) = {
+                    let (steam_account_id_from_dir, appid) = {
                         let mut path_components = event
                             .path
                             .strip_prefix(&steam_user_data_dir)?
@@ -300,8 +316,8 @@ fn main() -> Result<()> {
                     };
 
                     println!(
-                        "[u{}; a{:20}] Change detected in screenshot dir for app",
-                        steamid_from_dir, appid
+                        "[a{:20}] Change detected for user {}",
+                        appid, steam_account_id_from_dir
                     );
 
                     let users_list =
@@ -312,47 +328,66 @@ fn main() -> Result<()> {
                             .with_context(|| "Failed to find any Steam users")?
                             .to_owned();
 
-                    let (steamid_str, name) =
-                        match users_list.iter().find(|(steamid_str, _userinfo)| {
-                            let steamid = SteamID::from(steamid_str.parse::<u64>().unwrap_or(0));
+                    let (steamid64_str, name) =
+                        match users_list.iter().find(|(steamid64_str, _userinfo)| {
+                            let steamid = SteamID::from(steamid64_str.parse::<u64>().unwrap_or(0));
 
-                            u64::from(steamid.account_id()) == steamid_from_dir
+                            u64::from(steamid.account_id()) == steam_account_id_from_dir
                         }) {
-                            Some((steamid_str, userinfo)) => Some((
-                                steamid_str,
+                            Some((steamid64_str, userinfo)) => Some((
+                                steamid64_str,
                                 userinfo
                                     .get("PersonaName")
                                     .with_context(|| {
                                         format!(
                                             "Failed to retrieve account PersonaName for {}",
-                                            steamid_from_dir
+                                            steam_account_id_from_dir
                                         )
                                     })?
                                     .as_str()
                                     .with_context(|| {
                                         format!(
                                             "Failed to convert PersonaName for {} into a string",
-                                            steamid_from_dir
+                                            steam_account_id_from_dir
                                         )
                                     })?,
                             )),
                             None => None,
                         }
                         .with_context(|| {
-                            format!("Failed to get account information for {}", steamid_from_dir)
+                            format!(
+                                "Failed to get account information for {}",
+                                steam_account_id_from_dir
+                            )
                         })?;
 
-                    println!(
-                        "[u{}; a{:20}] Display name: {:?}",
-                        steamid_from_dir, appid, name
-                    );
+                    let mut target_screenshots_dir = screenshots_dir.clone();
 
-                    let target_screenshots_dir = screenshots_dir.join(name);
+                    if let Some(single_user_id64) = args.single_user_id64 {
+                        if single_user_id64 != steamid64_str.parse::<u64>().unwrap_or(0) {
+                            println!(
+                                "[a{:20}][u{}] Skipping mismatching user",
+                                appid, steamid64_str
+                            );
+                            continue;
+                        }
+                    } else {
+                        println!(
+                            "[a{:20}][u{}] Display name: {:?}",
+                            appid, steamid64_str, name
+                        );
+
+                        target_screenshots_dir = target_screenshots_dir.join(name);
+                    }
+
                     if !target_screenshots_dir.is_dir() {
                         std::fs::create_dir_all(target_screenshots_dir.clone())?;
                     }
 
-                    let steamid_steam_user_data_dir = steam_user_data_dir.join(&steamid_str);
+                    let steam_account_id_str = steam_account_id_from_dir.to_string();
+
+                    let steamid_steam_user_data_dir =
+                        steam_user_data_dir.join(&steam_account_id_str);
 
                     let steam_user_screenshots_dir =
                         steamid_steam_user_data_dir.join("760").join("remote");
@@ -360,15 +395,15 @@ fn main() -> Result<()> {
                     // If there's no screenshot folder, just move on to the next event
                     if !steam_user_screenshots_dir.is_dir() {
                         println!(
-                            "[u{}] User does not have a Steam screenshot folder!",
-                            steamid_str
+                            "[u{}] User does not have a Steam screenshot folder at {:?}!",
+                            steamid64_str, steam_user_screenshots_dir
                         );
                         continue;
                     }
 
                     println!(
-                        "[u{}; a{:20}] Found Steam screenshot folder {:?} for user {:?}",
-                        steamid_from_dir, appid, steam_user_screenshots_dir, name
+                        "[a{:20}][u{}] Found Steam screenshot folder {:?} for user {:?}",
+                        appid, steamid64_str, steam_user_screenshots_dir, name
                     );
 
                     let appid_str = appid.to_string();
