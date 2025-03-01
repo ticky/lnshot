@@ -418,13 +418,12 @@ dependencies = [
 
 [[package]]
 name = "keyvalues-serde"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0447866c47c00f8bd1949618e8f63017cf93e985b4684dc28d784527e2882390"
+checksum = "e2db0b750e9ae64e6c3d913832dc19ed580b9210bcd7c4dd6d0dd21af469fc14"
 dependencies = [
  "keyvalues-parser 0.2.0",
  "serde",
- "thiserror 1.0.50",
 ]
 
 [[package]]
@@ -482,7 +481,7 @@ dependencies = [
  "anyhow",
  "clap",
  "directories",
- "keyvalues-serde 0.2.1",
+ "keyvalues-serde 0.2.2",
  "lazy_static",
  "notify-debouncer-mini",
  "path-matchers",
