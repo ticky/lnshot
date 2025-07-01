@@ -128,7 +128,7 @@ fn main() -> Result<()> {
                     .to_owned();
 
             for (steamid64_str, userinfo) in users_list.iter() {
-                let steamid = SteamID::from(steamid64_str.parse::<u64>()?);
+                let steamid = SteamID::try_from(steamid64_str.parse::<u64>()?)?;
 
                 if let Some(single_user_id64) = args.single_user_id64 {
                     if single_user_id64 != steamid.into() {
@@ -330,7 +330,9 @@ fn main() -> Result<()> {
 
                     let (steamid64_str, name) =
                         match users_list.iter().find(|(steamid64_str, _userinfo)| {
-                            let steamid = SteamID::from(steamid64_str.parse::<u64>().unwrap_or(0));
+                            let steamid =
+                                SteamID::try_from(steamid64_str.parse::<u64>().unwrap_or(0))
+                                    .unwrap();
 
                             u64::from(steamid.account_id()) == steam_account_id_from_dir
                         }) {
