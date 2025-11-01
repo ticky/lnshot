@@ -15,7 +15,7 @@ lazy_static = "1.5"
 notify-debouncer-mini = "0.7"
 path-matchers = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-steamid-ng = "2.0"
+steamid-ng = "3.0"
 steamlocate = { version = "1.2", features = ["shortcuts_extras"] }
 steamy-vdf = "0.2"
 symlink = "0.1"
